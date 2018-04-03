@@ -13,6 +13,9 @@ import org.slf4j.LoggerFactory;
 
 import com.esotericsoftware.reflectasm.MethodAccess;
 
+/**
+* 使用esotericsoftware.reflectasm进行高效反射设置对象（springframework的太慢）
+*/
 public class BeanUtils {
     private final static Logger logger  = LoggerFactory.getLogger(BeanUtils.class);
 	
