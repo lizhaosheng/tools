@@ -1,4 +1,4 @@
-package com.lzs.tools.bean;
+package com.weidai.backgoods.util;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -8,15 +8,26 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.esotericsoftware.reflectasm.MethodAccess;
 
 public class BeanUtils {
-	private static ThreadLocal<Map<Class<?>,MethodAccess>> localMap = new ThreadLocal<>();
+    private final static Logger logger  = LoggerFactory.getLogger(BeanUtils.class);
+	
+    private static ThreadLocal<Map<Class<?>,MethodAccess>> localMap = new ThreadLocal<>();
     private static ThreadLocal<Map<String,String[][]>> getterSetterMap = new ThreadLocal<>();
     
     public static void copyProperties(Object src, Object dest){
+    	copyProperties(src, dest, null);
+    }
+    public static void copyProperties(Object src, Object dest, Boolean ignoreProptiesSettingException){
     	if(src == null || dest == null){
     		return ;
+    	}
+    	if(ignoreProptiesSettingException == null){
+    		ignoreProptiesSettingException = Boolean.FALSE;
     	}
     	Map<Class<?>, MethodAccess> map = localMap.get();
     	if(map == null){
@@ -24,7 +35,6 @@ public class BeanUtils {
     		localMap.set(map );
     	}
     	
-    	//使用reflectasm生产User访问类  
         MethodAccess access1 = map.get(src.getClass());
     	if(access1 == null){
     		access1 = MethodAccess.get(src.getClass());  
@@ -38,12 +48,26 @@ public class BeanUtils {
         
     	String[][] pairs = getMethodPairs(src.getClass(), dest.getClass());
     	
-        for (int i=0;i<pairs.length;i++) {
-        	if(pairs[i][0] == null){
-        		break;
-        	}
-        	access2.invoke(dest, pairs[i][1],access1.invoke(src, pairs[i][0]));
-        }
+    	if(!ignoreProptiesSettingException){
+    		for (int i=0;i<pairs.length;i++) {
+            	if(pairs[i][0] == null){
+            		break;
+            	}
+            	access2.invoke(dest, pairs[i][1],access1.invoke(src, pairs[i][0]));
+            }
+    	} else {
+    		for (int i=0;i<pairs.length;i++) {
+            	if(pairs[i][0] == null){
+            		break;
+            	}
+            	try{
+            		access2.invoke(dest, pairs[i][1],access1.invoke(src, pairs[i][0]));
+            	} catch (Exception e){
+            		logger.warn("setting property exception. setter method name=" + pairs[i][1] + "getter method name=" + pairs[i][0]);
+            	}
+            }
+    	}
+        
     }
 
 	private static String[][] getMethodPairs(Class<?> class1, Class<?> class2) {
