@@ -1,4 +1,4 @@
-package com.weidai.backgoods.util;
+package com.lzs.tools.bean;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -8,29 +8,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import com.esotericsoftware.reflectasm.MethodAccess;
 
 /**
-* 使用esotericsoftware.reflectasm进行高效反射设置对象（springframework的太慢）
-*/
+ * 使用reflectasm 比传统的common包提供的BeanUtils 效率高非常多
+ */
+@Slf4j
 public class BeanUtils {
-    private final static Logger logger  = LoggerFactory.getLogger(BeanUtils.class);
 	
-    private static ThreadLocal<Map<Class<?>,MethodAccess>> localMap = new ThreadLocal<>();
+	private static ThreadLocal<Map<Class<?>,MethodAccess>> localMap = new ThreadLocal<>();
     private static ThreadLocal<Map<String,String[][]>> getterSetterMap = new ThreadLocal<>();
     
     public static void copyProperties(Object src, Object dest){
-    	copyProperties(src, dest, null);
+    	copyProperties(src, dest, true, true);
     }
-    public static void copyProperties(Object src, Object dest, Boolean ignoreProptiesSettingException){
+    public static void copyProperties(Object src, Object dest, boolean ignoreProptiesSettingException, boolean ignoreNull){
     	if(src == null || dest == null){
     		return ;
-    	}
-    	if(ignoreProptiesSettingException == null){
-    		ignoreProptiesSettingException = Boolean.FALSE;
     	}
     	Map<Class<?>, MethodAccess> map = localMap.get();
     	if(map == null){
@@ -52,23 +48,54 @@ public class BeanUtils {
     	String[][] pairs = getMethodPairs(src.getClass(), dest.getClass());
     	
     	if(!ignoreProptiesSettingException){
-    		for (int i=0;i<pairs.length;i++) {
-            	if(pairs[i][0] == null){
-            		break;
-            	}
-            	access2.invoke(dest, pairs[i][1],access1.invoke(src, pairs[i][0]));
-            }
+    		if(ignoreNull){
+				for (int i=0;i<pairs.length;i++) {
+					if(pairs[i][0] == null){
+						break;
+					}
+					Object val = access1.invoke(src, pairs[i][0]);
+					if(val == null) {
+						continue;
+					}
+					access2.invoke(dest, pairs[i][1],val);
+				}
+			} else {
+				for (int i = 0; i < pairs.length; i++) {
+					if (pairs[i][0] == null) {
+						break;
+					}
+					access2.invoke(dest, pairs[i][1], access1.invoke(src, pairs[i][0]));
+				}
+			}
+
     	} else {
-    		for (int i=0;i<pairs.length;i++) {
-            	if(pairs[i][0] == null){
-            		break;
-            	}
-            	try{
-            		access2.invoke(dest, pairs[i][1],access1.invoke(src, pairs[i][0]));
-            	} catch (Exception e){
-            		logger.warn("setting property exception. setter method name=" + pairs[i][1] + "getter method name=" + pairs[i][0]);
-            	}
-            }
+    		if(ignoreNull) {
+				for (int i = 0; i < pairs.length; i++) {
+					if (pairs[i][0] == null) {
+						break;
+					}
+					try {
+						Object val = access1.invoke(src, pairs[i][0]);
+						if(val == null) {
+							continue;
+						}
+						access2.invoke(dest, pairs[i][1],val);
+					} catch (Exception e) {
+						log.warn("setting property exception. setter method name=" + pairs[i][1] + "getter method name=" + pairs[i][0]);
+					}
+				}
+			} else {
+				for (int i = 0; i < pairs.length; i++) {
+					if (pairs[i][0] == null) {
+						break;
+					}
+					try {
+						access2.invoke(dest, pairs[i][1],access1.invoke(src, pairs[i][0]));
+					} catch (Exception e) {
+						log.warn("setting property exception. setter method name=" + pairs[i][1] + "getter method name=" + pairs[i][0]);
+					}
+				}
+			}
     	}
         
     }
@@ -113,4 +140,26 @@ public class BeanUtils {
     	
 		return map.get(key);
 	}
+
+	public static <T> List<T> copyList(List src, Class<T> cl) {
+		List<T> dest = new ArrayList<>();
+		copyList(src,dest,cl,true,true);
+		return dest;
+	}
+	public static <T> void copyList(List src, List dest, Class<T> cl) {
+		copyList(src,dest,cl,true,true);
+	}
+	public static <T> void copyList(List src, List dest, Class<T> cl, boolean ignoreProptiesSettingException, boolean ignoreNull) {
+		try {
+			for (Object obj : src) {
+				Object newobj = cl.newInstance();
+				copyProperties(obj, newobj,ignoreProptiesSettingException,ignoreNull);
+				dest.add(newobj);
+			}
+		} catch (InstantiationException | IllegalAccessException e) {
+			log.error("cl.newInstance() exception, please check if there is a default 'constructor' method in class '" + cl.getName() + "'");
+			e.printStackTrace();
+		}
+	}
 }
+
